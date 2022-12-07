@@ -17,6 +17,27 @@ const service      = Ember.inject.service;
 
 const defaultRadix = 10;
 const defaultBase  = 1024;
+
+const stringsToParams = (params, str) => {
+  const index = str.indexOf('=');
+
+  if (index > -1) {
+    params.push({
+      key: str.slice(0, index),
+      value: str.slice(index + 1),
+    });
+  }
+
+  return params;
+};
+
+const paramsToStrings = (strs, param) => {
+  if (param.value && param.key) {
+    strs.push(`${param.key}=${param.value}`);
+  }
+
+  return strs;
+};
 /*!!!!!!!!!!!GLOBAL CONST END!!!!!!!!!!!*/
 
 
@@ -27,6 +48,9 @@ export default Ember.Component.extend(NodeDriver, {
   config:     alias('model.%%DRIVERNAME%%Config'),
   app:        service(),
 
+  initCategory: null,
+  initNetwork: null,
+
   init() {
     // This does on the fly template compiling, if you mess with this :cry:
     const decodedLayout = window.atob(LAYOUT);
@@ -36,6 +60,8 @@ export default Ember.Component.extend(NodeDriver, {
     set(this,'layout', template);
 
     this._super(...arguments);
+    this.initCategoryParams('config.vmCategories', 'initCategory');
+    this.initNetworkParams('config.vmNetwork', 'initNetwork');
 
   },
   /*!!!!!!!!!!!DO NOT CHANGE END!!!!!!!!!!!*/
@@ -45,8 +71,22 @@ export default Ember.Component.extend(NodeDriver, {
     // bootstrap is called by rancher ui on 'init', you're better off doing your setup here rather then the init function to ensure everything is setup correctly
     let config = get(this, 'globalStore').createRecord({
       type: '%%DRIVERNAME%%Config',
-      cpuCount: 2,
-      memorySize: 2048,
+      username: "admin",
+      password: "",
+      vmCpus: 2,
+      vmCores: 1,
+      vmMem: 4096,
+      vmCpuPassthrough: false,
+      vmImage: "",
+      vmImageSize: 0,
+      vmNetwork: [],
+      vmCategories: [],
+      project: "",
+      cluster: "",
+      insecure: true,
+      storageContainer: "",
+      diskSize: 0,
+      cloudInit: "#cloud-config\n\n"
     });
 
     set(this, 'model.%%DRIVERNAME%%Config', config);
@@ -63,9 +103,33 @@ export default Ember.Component.extend(NodeDriver, {
 
     // Add more specific errors
 
+    // Check Account info
+    if (!get(this, 'config.endpoint')) {
+      errors.push('Management Endpoint is required');
+    }
+    if (!get(this, 'config.username')) {
+      errors.push('Username is required');
+    }
+    if (!get(this, 'config.password')) {
+      errors.push('Password is required');
+    }
+    if (!get(this, 'config.cluster')) {
+      errors.push('Cluster is required');
+    }
+
     // Check something and add an error entry if it fails:
-    if ( parseInt(get(this, 'config.memorySize'), defaultRadix) < defaultBase ) {
+    if (parseInt(get(this, 'config.vmMem'), defaultRadix) < defaultBase) {
       errors.push('Memory Size must be at least 1024 MB');
+    }
+
+    // Check template image
+    if (!get(this, 'config.vmImage')) {
+      errors.push('Template image is required');
+    }
+
+    // Check network interface
+    if (get(this, 'config.vmNetwork').length === 0) {
+      errors.push('Network interface is required');
     }
 
     // Set the array of errors for display,
@@ -80,4 +144,29 @@ export default Ember.Component.extend(NodeDriver, {
   },
 
   // Any computed properties or custom logic can go here
+  actions: {
+    categoryChanged(array) {
+      this.updateCategoryParams('config.vmCategories', array);
+    },
+
+    networkChanged(array) {
+      this.updateNetwork('config.vmNetwork', array);
+    }
+  },
+
+  initCategoryParams(pairsKey, paramsKey) {
+    set(this, paramsKey, (get(this, pairsKey) || []).reduce(stringsToParams, []));
+  },
+
+  updateCategoryParams(pairsKey, params) {
+    set(this, pairsKey, params.reduce(paramsToStrings, []));
+  },
+
+  initNetworkParams(pairsKey, paramsKey) {
+    set(this, paramsKey, (get(this, pairsKey) || []));
+  },
+
+  updateNetwork(pairsKey, networks) {
+    set(this, pairsKey, networks);
+  },
 });
